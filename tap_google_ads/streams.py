@@ -382,7 +382,7 @@ class ReportStream(BaseStream):
                         self.stream_schema["properties"][transformed_field_name] = ad_field_schema
 
                 # Ensure that resource fields have the resource name as a prefix, eg campaign_id
-                if resource_name not in {"metrics", "segments"}:
+                elif resource_name not in {"metrics", "segments"}:
                     # TODO: create transformed_field_name with a function
                     self.stream_schema["properties"][f"{resource_name}_{field_name}"] = data_type
                 else:
@@ -411,8 +411,8 @@ class ReportStream(BaseStream):
             if report_field.startswith("ad_group_ad.ad."):
                 # TODO: create transformed_field_name with a function
                 split_fields = report_field.split(".")
-            if not is_metric_or_segment:
                 transformed_field_name = transform_ad_group_ad_ad_field_names(split_fields[0], split_fields[2])
+            elif not is_metric_or_segment:
                 # TODO: create transformed_field_name with a function
                 transformed_field_name = "_".join(report_field.split(".")[:2])
             else:
