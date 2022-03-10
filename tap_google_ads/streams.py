@@ -129,6 +129,10 @@ def make_request(gas, query, customer_id):
     return response
 
 
+def transform_ad_group_ad_ad_field_names(resource_name, field_name):
+    return f"{resource_name}_{field_name}"
+
+
 class BaseStream:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, fields, google_ads_resource_names, resource_schema, primary_keys):
@@ -374,7 +378,7 @@ class ReportStream(BaseStream):
                 if resource_name == "ad_group_ad" and field_name == "ad":
                     for ad_field_name, ad_field_schema in data_type["properties"].items():
                         # TODO: create transformed_field_name with a function
-                        transformed_field_name = f"{resource_name}_{ad_field_name}"
+                        transformed_field_name = transform_ad_group_ad_ad_field_names(resource_name, ad_field_name)
                         self.stream_schema["properties"][transformed_field_name] = ad_field_schema
 
                 # Ensure that resource fields have the resource name as a prefix, eg campaign_id
@@ -407,8 +411,8 @@ class ReportStream(BaseStream):
             if report_field.startswith("ad_group_ad.ad."):
                 # TODO: create transformed_field_name with a function
                 split_fields = report_field.split(".")
-                transformed_field_name = f"{split_fields[0]}_{split_fields[2]}"
             if not is_metric_or_segment:
+                transformed_field_name = transform_ad_group_ad_ad_field_names(split_fields[0], split_fields[2])
                 # TODO: create transformed_field_name with a function
                 transformed_field_name = "_".join(report_field.split(".")[:2])
             else:
