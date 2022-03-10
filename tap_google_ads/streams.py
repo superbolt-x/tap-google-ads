@@ -326,6 +326,29 @@ def get_query_date(start_date, bookmark, conversion_window_date):
 
 
 class ReportStream(BaseStream):
+    def extract_field_information(self, resource_schema):
+        self.field_exclusions = defaultdict(set)
+        self.schema = {}
+        self.behavior = {}
+
+        for resource_name in self.google_ads_resource_names:
+
+            # field_exclusions step
+            fields = resource_schema[resource_name]["fields"]
+            for field_name, field in fields.items():
+                if field_name in self.fields:
+                    self.field_exclusions[field_name].update(
+                        field["incompatible_fields"]
+                    )
+
+                    self.schema[field_name] = field["field_details"]["json_schema"]
+
+                    # This is only used in build_stream_metadata
+                    self.behavior[field_name] = field["field_details"]["category"]
+
+            self.add_extra_fields(resource_schema)
+        self.field_exclusions = {k: list(v) for k, v in self.field_exclusions.items()}
+
     def create_full_schema(self, resource_schema):
         google_ads_name = self.google_ads_resource_names[0]
         self.resource_object = resource_schema[google_ads_name]
