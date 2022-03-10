@@ -341,6 +341,7 @@ class ReportStream(BaseStream):
 
                     self.schema[field_name] = field["field_details"]["json_schema"]
 
+                    # TODO: create transformed_field_name with a function
                     # This is only used in build_stream_metadata
                     self.behavior[field_name] = field["field_details"]["category"]
 
@@ -372,13 +373,16 @@ class ReportStream(BaseStream):
                 # Move ad_group_ad.ad.x fields up a level in the schema (ad_group_ad.ad.x -> ad_group_ad.x)
                 if resource_name == "ad_group_ad" and field_name == "ad":
                     for ad_field_name, ad_field_schema in data_type["properties"].items():
+                        # TODO: create transformed_field_name with a function
                         transformed_field_name = f"{resource_name}_{ad_field_name}"
                         self.stream_schema["properties"][transformed_field_name] = ad_field_schema
 
                 # Ensure that resource fields have the resource name as a prefix, eg campaign_id
                 if resource_name not in {"metrics", "segments"}:
+                    # TODO: create transformed_field_name with a function
                     self.stream_schema["properties"][f"{resource_name}_{field_name}"] = data_type
                 else:
+                    # TODO: create transformed_field_name with a function
                     self.stream_schema["properties"][field_name] = data_type
 
     def build_stream_metadata(self):
@@ -397,13 +401,17 @@ class ReportStream(BaseStream):
             # Transform the field name to match the schema
             is_metric_or_segment = report_field.startswith("metrics.") or report_field.startswith("segments.")
 
+
             # Transform ad_group_ad.ad.x fields to just x to reflect ad_group_ads schema
             if report_field.startswith("ad_group_ad.ad."):
+                # TODO: create transformed_field_name with a function
                 split_fields = report_field.split(".")
                 transformed_field_name = f"{split_fields[0]}_{split_fields[2]}"
             if not is_metric_or_segment:
+                # TODO: create transformed_field_name with a function
                 transformed_field_name = "_".join(report_field.split(".")[:2])
             else:
+                # TODO: create transformed_field_name with a function
                 transformed_field_name = report_field.split(".")[1]
 
 
@@ -411,6 +419,7 @@ class ReportStream(BaseStream):
             if ("properties", transformed_field_name) not in self.stream_metadata:
                 self.stream_metadata[("properties", transformed_field_name)] = {
                     "fieldExclusions": [],
+                    # TODO: create transformed_field_name with a function
                     "behavior": self.behavior[report_field],
                 }
 
@@ -420,13 +429,16 @@ class ReportStream(BaseStream):
                     if (not is_metric_or_segment
                         and field_name.split(".")[0] not in self.google_ads_resource_names
                     ):
+                        # TODO: create transformed_field_name with a function
                         new_field_name = field_name.replace(".", "_")
                     else:
+                        # TODO: create transformed_field_name with a function
                         new_field_name = field_name.split(".")[1]
 
                     self.stream_metadata[("properties", transformed_field_name)]["fieldExclusions"].append(new_field_name)
 
             # Add inclusion metadata
+            # TODO: create transformed_field_name with a function
             if self.behavior[report_field]:
                 inclusion = "available"
                 if report_field == "segments.date":
