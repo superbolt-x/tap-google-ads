@@ -348,13 +348,15 @@ class ReportStream(BaseStream):
         """
         for resource_name, schema in self.full_schema["properties"].items():
             for field_name, data_type in schema["properties"].items():
-                # Ensure that attributed resource fields have the resource name as a prefix, eg campaign_id under the ad_groups stream
-                if resource_name not in {"metrics", "segments"} and resource_name not in self.google_ads_resource_names:
-                    self.stream_schema["properties"][f"{resource_name}_{field_name}"] = data_type
                 # Move ad_group_ad.ad.x fields up a level in the schema (ad_group_ad.ad.x -> ad_group_ad.x)
-                elif resource_name == "ad_group_ad" and field_name == "ad":
+                if resource_name == "ad_group_ad" and field_name == "ad":
                     for ad_field_name, ad_field_schema in data_type["properties"].items():
-                        self.stream_schema["properties"][ad_field_name] = ad_field_schema
+                        transformed_field_name = f"{resource_name}_{ad_field_name}"
+                        self.stream_schema["properties"][transformed_field_name] = ad_field_schema
+
+                # Ensure that resource fields have the resource name as a prefix, eg campaign_id
+                if resource_name not in {"metrics", "segments"}:
+                    self.stream_schema["properties"][f"{resource_name}_{field_name}"] = data_type
                 else:
                     self.stream_schema["properties"][field_name] = data_type
 
@@ -373,15 +375,16 @@ class ReportStream(BaseStream):
         for report_field in self.fields:
             # Transform the field name to match the schema
             is_metric_or_segment = report_field.startswith("metrics.") or report_field.startswith("segments.")
-            if (not is_metric_or_segment
-                and report_field.split(".")[0] not in self.google_ads_resource_names
-            ):
-                transformed_field_name = "_".join(report_field.split(".")[:2])
+
             # Transform ad_group_ad.ad.x fields to just x to reflect ad_group_ads schema
-            elif report_field.startswith("ad_group_ad.ad."):
-                transformed_field_name = report_field.split(".")[2]
+            if report_field.startswith("ad_group_ad.ad."):
+                split_fields = report_field.split(".")
+                transformed_field_name = f"{split_fields[0]}_{split_fields[2]}"
+            if not is_metric_or_segment:
+                transformed_field_name = "_".join(report_field.split(".")[:2])
             else:
                 transformed_field_name = report_field.split(".")[1]
+
 
             # Base metadata for every field
             if ("properties", transformed_field_name) not in self.stream_metadata:
