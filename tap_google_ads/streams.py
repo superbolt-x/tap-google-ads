@@ -177,6 +177,7 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
         self.set_stream_schema()
         self.format_field_names()
 
+        self.filter_unwanted_fields()
         self.build_stream_metadata()
 
 
@@ -245,12 +246,17 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
 
 
     def filter_unwanted_fields(self):
-        new_resource_fields = {}
-        for field, props in self.resource_fields.items():
-            if field in self.fields:
-                new_resource_fields[field] = props
+        google_ads_resource_name = self.google_ads_resource_names[0]
+        # Uses the report definitions to remove fields we do not want to include
+        # for resources specified in the set below to allow for fewer fields in
+        # the core streams
+        if google_ads_resource_name in {"ad_group_criterion"}:
+            new_resource_fields = {}
+            for field, props in self.resource_fields.items():
+                if field in self.fields:
+                    new_resource_fields[field] = props
 
-        self.resource_fields = new_resource_fields
+            self.resource_fields = new_resource_fields
 
 
     def build_stream_metadata(self):
@@ -261,11 +267,6 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
                 "table-key-properties": self.primary_keys,
             }
         }
-
-        google_ads_resource_name = self.google_ads_resource_names[0]
-
-        if google_ads_resource_name == "ad_group_criterion":
-                self.filter_unwanted_fields()
 
         for field, props in self.resource_fields.items():
 
