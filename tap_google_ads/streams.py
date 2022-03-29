@@ -264,10 +264,10 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
 
         google_ads_resource_name = self.google_ads_resource_names[0]
 
-        for field, props in self.resource_fields.items():
-
-            if google_ads_resource_name == "ad_group_criterion":
+        if google_ads_resource_name == "ad_group_criterion":
                 self.filter_unwanted_fields()
+
+        for field, props in self.resource_fields.items():
 
             resource_matches = field.startswith(self.resource_object["name"] + ".")
             is_id_field = field.endswith(".id")
