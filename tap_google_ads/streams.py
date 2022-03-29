@@ -211,11 +211,18 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
         google_ads_name = self.google_ads_resource_names[0]
         self.resource_object = resource_schema[google_ads_name]
         self.resource_fields = self.resource_object["fields"]
-        self.full_schema = create_nested_resource_schema(resource_schema, self.resource_fields)
+
+        # ad_group_criterion stream has more attributed resources than we want so we
+        # use the report definition to ensure only desired fields are present
+        if google_ads_name == "ad_group_criterion":
+            self.full_schema = create_nested_resource_schema(resource_schema, self.fields)
+        else:
+            self.full_schema = create_nested_resource_schema(resource_schema, self.resource_fields)
 
     def set_stream_schema(self):
         google_ads_name = self.google_ads_resource_names[0]
         self.stream_schema = self.full_schema["properties"][google_ads_name]
+
 
     def format_field_names(self):
         """This function does two things:
@@ -236,6 +243,16 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
             ):
                 self.stream_schema["properties"][resource_name + "_id"] = schema["properties"]["id"]
 
+
+    def filter_unwanted_fields(self):
+        new_resource_fields = {}
+        for field, props in self.resource_fields.items():
+            if field in self.fields:
+                new_resource_fields[field] = props
+
+        self.resource_fields = new_resource_fields
+
+
     def build_stream_metadata(self):
         self.stream_metadata = {
             (): {
@@ -245,7 +262,13 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
             }
         }
 
+        google_ads_resource_name = self.google_ads_resource_names[0]
+
         for field, props in self.resource_fields.items():
+
+            if google_ads_resource_name == "ad_group_criterion":
+                self.filter_unwanted_fields()
+
             resource_matches = field.startswith(self.resource_object["name"] + ".")
             is_id_field = field.endswith(".id")
 
@@ -540,11 +563,23 @@ class ReportStream(BaseStream):
 
 def initialize_core_streams(resource_schema):
     return {
+        "accessible_bidding_strategies": BaseStream(
+            report_definitions.ACCESSIBLE_BIDDING_STRATEGY_FIELDS,
+            ["accessible_bidding_strategy"],
+            resource_schema,
+            ["id"],
+        ),
         "accounts": BaseStream(
             report_definitions.ACCOUNT_FIELDS,
             ["customer"],
             resource_schema,
             ["id"],
+        ),
+        "ad_group_criterion": BaseStream(
+            report_definitions.AD_GROUP_CRITERION_FIELDS,
+            ["ad_group_criterion"],
+            resource_schema,
+            ["criterion_id"],
         ),
         "ad_groups": BaseStream(
             report_definitions.AD_GROUP_FIELDS,
@@ -558,21 +593,15 @@ def initialize_core_streams(resource_schema):
             resource_schema,
             ["id"],
         ),
-        "campaigns": BaseStream(
-            report_definitions.CAMPAIGN_FIELDS,
-            ["campaign"],
-            resource_schema,
-            ["id"],
-        ),
         "bidding_strategies": BaseStream(
             report_definitions.BIDDING_STRATEGY_FIELDS,
             ["bidding_strategy"],
             resource_schema,
             ["id"],
         ),
-        "accessible_bidding_strategies": BaseStream(
-            report_definitions.ACCESSIBLE_BIDDING_STRATEGY_FIELDS,
-            ["accessible_bidding_strategy"],
+        "campaigns": BaseStream(
+            report_definitions.CAMPAIGN_FIELDS,
+            ["campaign"],
             resource_schema,
             ["id"],
         ),

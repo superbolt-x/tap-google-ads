@@ -9,11 +9,12 @@ from tap_google_ads.streams import initialize_reports
 
 LOGGER = singer.get_logger()
 
-REPORTS = [
+STREAMS = [
     "accessible_bidding_strategy",
     "ad_group",
     "ad_group_ad",
     "ad_group_audience_view",
+    "ad_group_criterion",
     "age_range_view",
     "bidding_strategy",
     "call_view",
