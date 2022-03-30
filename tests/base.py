@@ -133,7 +133,7 @@ class GoogleAdsBase(unittest.TestCase):
             'ad_group_criterion': {
                 self.PRIMARY_KEYS: {"criterion_id"},
                 self.REPLICATION_METHOD: self.FULL_TABLE,
-                self.FOREIGN_KEYS: {"ad_group_id, campaign_id, customer_id"},
+                self.FOREIGN_KEYS: {"ad_group_id", "campaign_id", "customer_id"},
             },
             # Report objects
             "age_range_performance_report": {  # "age_range_view"
