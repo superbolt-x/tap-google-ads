@@ -1,5 +1,6 @@
 from collections import defaultdict
 import json
+import time
 import hashlib
 from datetime import timedelta
 import singer
@@ -89,9 +90,14 @@ def create_core_stream_query(resource_name, selected_fields):
 def create_report_query(resource_name, selected_fields, query_date):
 
     format_str = "%Y-%m-%d"
-    query_date = utils.strftime(query_date, format_str=format_str)
-    report_query = f"SELECT {','.join(selected_fields)} FROM {resource_name} WHERE segments.date = '{query_date}' {build_parameters()}"
+    query_start_date = utils.strftime(query_date, format_str=format_str)
+    query_end_date = utils.strftime(query_date+timedelta(days=14), format_str=format_str)
+    if "conversion_action" in ''.join(selected_fields):
+        report_query = f"SELECT {','.join(selected_fields)} FROM {resource_name} WHERE segments.date >= '{query_start_date}' AND segments.date < '{query_end_date}' {build_parameters()}"
+    else:
+        report_query = f"SELECT {','.join(selected_fields)} FROM {resource_name} WHERE metrics.cost_micros > 0 AND segments.date >= '{query_start_date}' AND segments.date < '{query_end_date}' {build_parameters()}"
 
+    LOGGER.info(report_query)
     return report_query
 
 
@@ -101,6 +107,7 @@ def generate_hash(record, metadata):
     for key, val in record.items():
         if metadata[("properties", key)]["behavior"] != "METRIC":
             fields_to_hash.append((key, val))
+
 
     hash_source_data = sorted(fields_to_hash, key=lambda x: x[0])
     hash_bytes = json.dumps(hash_source_data).encode("utf-8")
@@ -328,8 +335,10 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
         singer.write_state(state)
 
         query = create_core_stream_query(resource_name, selected_fields)
+        LOGGER.info("Query: %s", query)
         try:
             response = make_request(gas, query, customer["customerId"])
+            LOGGER.info("Response: %s", response)
         except GoogleAdsException as err:
             LOGGER.warning("Failed query: %s", query)
             raise err
@@ -337,10 +346,11 @@ class BaseStream:  # pylint: disable=too-many-instance-attributes
         with Transformer() as transformer:
             # Pages are fetched automatically while iterating through the response
             for message in response:
+                LOGGER.info("message: %s", message)
                 json_message = google_message_to_json(message)
                 transformed_obj = self.transform_keys(json_message)
                 record = transformer.transform(transformed_obj, stream["schema"], singer.metadata.to_map(stream_mdata))
-
+                LOGGER.info("Record: %s", record)
                 singer.write_record(stream_name, record)
 
 
@@ -508,12 +518,21 @@ class ReportStream(BaseStream):
         if selected_fields == {'segments.date'}:
             raise Exception(f"Selected fields is currently limited to {', '.join(selected_fields)}. Please select at least one attribute and metric in order to replicate {stream_name}.")
 
+        LOGGER.info(query_date)
+        LOGGER.info(end_date)
         while query_date <= end_date:
+            LOGGER.info(f"Query date: {query_date}")
             query = create_report_query(resource_name, selected_fields, query_date)
+            if stream_name == 'search_query_performance_report':
+                keywordless_selected_fields = [f for f in selected_fields if 'keyword' not in f]
+                keywordless_query = create_report_query(resource_name, keywordless_selected_fields, query_date)
+                keywordless_query = keywordless_query.replace("WHERE","WHERE campaign.name LIKE '%Shopping%' AND")
             LOGGER.info(f"Requesting {stream_name} data for {utils.strftime(query_date, '%Y-%m-%d')}.")
 
             try:
                 response = make_request(gas, query, customer["customerId"])
+                if stream_name == 'search_query_performance_report':
+                    keywordless_response = make_request(gas, keywordless_query, customer["customerId"])
             except GoogleAdsException as err:
                 LOGGER.warning("Failed query: %s", query)
                 LOGGER.critical(str(err.failure.errors[0].message))
@@ -526,16 +545,44 @@ class ReportStream(BaseStream):
                     json_message = google_message_to_json(message)
                     transformed_obj = self.transform_keys(json_message)
                     record = transformer.transform(transformed_obj, stream["schema"])
+
+                    if stream_name=='search_query_performance_report':
+                        LOGGER.info(record)
+                        LOGGER.info(record['keyword'])
+                        record['keyword']=record['keyword'].replace('\'"', '"')
+                        record['keyword']=record['keyword'].replace("\''", "'")
+                        record['keyword']=record['keyword'].replace('\\','')
+                        record['keyword']=record['keyword'].replace("'",'"')
+                        LOGGER.info(record['keyword'])
+                        record['keyword']=json.loads(record['keyword'])
+                        record["keyword"]=record["keyword"]["info"]["text"]
+                        LOGGER.info("Success")
+
                     record["_sdc_record_hash"] = generate_hash(record, stream_mdata)
 
+                    if stream_name=='shopping_performance_report' and record.get('product_merchant_id',0)==0:
+                            record['product_item_id']='0'
+
                     singer.write_record(stream_name, record)
+
+                if stream_name == 'search_query_performance_report':
+                    for message in keywordless_response:
+                        json_message = google_message_to_json(message)
+                        transformed_obj = self.transform_keys(json_message)
+                        record = transformer.transform(transformed_obj, stream["schema"])
+
+                        record['keyword'] = None
+                        record["_sdc_record_hash"] = generate_hash(record, stream_mdata)
+
+                        singer.write_record(stream_name, record)
 
             new_bookmark_value = {replication_key: utils.strftime(query_date)}
             singer.write_bookmark(state, stream["tap_stream_id"], customer["customerId"], new_bookmark_value)
 
             singer.write_state(state)
 
-            query_date += timedelta(days=1)
+            query_date = query_date + timedelta(days=14)
+            LOGGER.info(query_date)
 
 
 def initialize_core_streams(resource_schema):
